@@ -15,6 +15,7 @@ struct ProfilingInstrumentationPass : public llvm::ModulePass {
 
   static char ID;
 
+  llvm::DenseMap<llvm::StringRef, int64_t> fn_names;
   ProfilingInstrumentationPass()
     : llvm::ModulePass(ID)
       { }
@@ -27,4 +28,3 @@ struct ProfilingInstrumentationPass : public llvm::ModulePass {
 
 
 #endif
-
