@@ -73,30 +73,27 @@ createFunctionTable(Module& m, uint64_t numFunctions, std::vector<Function*> fun
 }
 
 static void
-createCallTable(Module& m, uint64_t numCalls, uint64_t numFunctions, std::vector<CallSite> calls) {
+createCallTable(Module& m, uint64_t numCalls, std::vector<CallSite> calls) {
 	auto& context = m.getContext();
 
 	auto *int64Ty = Type::getInt64Ty(context);
 	auto *stringTy = Type::getInt8PtrTy(context);
-	auto *arrayTy = ArrayType::get(int64Ty, numFunctions);
-	Type *fieldTys[] = {stringTy, int64Ty, stringTy, arrayTy};
+	Type *fieldTys[] = {stringTy, int64Ty, stringTy};
 	auto* structTy   = StructType::get(context, fieldTys, false);
 	auto* tableTy    = ArrayType::get(structTy, numCalls);
-
 
 	std::vector<Constant*> values;
 	std::transform(
 		calls.begin(),
 		calls.end(),
 		std::back_inserter(values),
-		[&m, structTy, int64Ty, arrayTy](CallSite cs) {
+		[&m, structTy, int64Ty](CallSite cs) {
 			DILocation *Loc = cs.getInstruction()->getDebugLoc();
 
 			Constant* structFields[] = {
 				createConstantString(m, Loc->getFilename()), // srcfile
 				ConstantInt::get(int64Ty, Loc->getLine(), false), // line_num
 				createConstantString(m, cs.getParent()->getParent()->getName()), // caller
-				ConstantArray::getNullValue(arrayTy) // count
 			};
 			return ConstantStruct::get(structTy, structFields);
 		}
@@ -181,7 +178,7 @@ ProfilingInstrumentationPass::runOnModule(llvm::Module& m) {
 						continue;
 					}
 				}
-				/* cast the function to an int TODO:: invalid bitcast error */
+				/* cast the function to an int */
 				auto called = cs.getCalledValue()->stripPointerCasts();
 				auto* v = builder.CreateBitOrPointerCast(called, int64Ty);
 
@@ -228,7 +225,13 @@ ProfilingInstrumentationPass::runOnModule(llvm::Module& m) {
 	new GlobalVariable(m, int64Ty, true, GlobalValue::ExternalLinkage,
 		global_csmap_size, "CaLlPrOfIlEr_csmap_size");
 
-	createCallTable(m, cs_id, fn_id, cs_list);
+	createCallTable(m, cs_id, cs_list);
+
+	/* build the array for holding the counts */
+	auto *countTy = ArrayType::get(int64Ty, cs_id * fn_id);
+	auto *global_counts = ConstantArray::getNullValue(countTy);
+	new GlobalVariable(m, countTy, false, GlobalValue::ExternalLinkage,
+		global_counts, "CaLlPrOfIlEr_calls");
 
 	/* add a call to the printer function to the destructor list */
 	auto* printer = m.getOrInsertFunction("CaLlPrOfIlEr_print", voidTy);

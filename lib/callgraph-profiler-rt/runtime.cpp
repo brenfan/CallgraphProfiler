@@ -25,10 +25,10 @@ extern "C" {
 		char* srcfile;
 		uint64_t line;
 		char* caller;
-		uint64_t *calls; //array with # of calls to each function
 
 	} CGPROF(csmap)[];
 
+	extern uint64_t CGPROF(calls)[];
 	/* function map */
 	extern struct {
 		char* fn_name;
@@ -67,21 +67,22 @@ extern "C" {
 
 		/* increment the array */
 
-		CGPROF(csmap)[cs_i].calls[fn_id]++;
+		CGPROF(calls)[cs_i * CGPROF(fnmap_size) + fn_id]++;
 	}
 
 	void
 	CGPROF(print) (void) {
 		FILE *f = fopen(OUTPUT_FILENAME, "w");
-		for (size_t cs_id = 0; cs_id < CGPROF(csmap_size); cs_id++) {
+		for (size_t cs_id = 0; cs_id < CGPROF(csmap_size) + 1; cs_id++) {
 			for (size_t fn_id = 0; fn_id < CGPROF(fnmap_size); fn_id++) {
-				auto& info = CGPROF(csmap)[cs_id];
-				if (info.calls[fn_id]) {
+				uint64_t count = CGPROF(calls)[cs_id * CGPROF(fnmap_size) + fn_id];
+				if (count) {
+					auto& info = CGPROF(csmap)[cs_id];
 					fprintf(f, "%s, %s, %lu, %s, %lu\n",
 						info.caller, info.srcfile,
 						info.line,
 						CGPROF(fnmap)[fn_id].fn_name,
-						info.calls[fn_id]);
+						count);
 				}
 			}
 		}
