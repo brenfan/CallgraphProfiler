@@ -41,7 +41,7 @@ extern "C" {
 	}
 
 	void
-	CGPROF(record) (char *srcfile, uint64_t line, char* caller, uint64_t fnptr) {
+	CGPROF(record) (uint64_t cs_id, uint64_t fnptr) {
 		/* index the function map to
 			determine which fn_id relates to fn_ptr */
 
@@ -54,20 +54,9 @@ extern "C" {
 			fn_id++;
 		}
 
-		/* index the call list */
-		uint64_t cs_i = 0;
-		while (cs_i < CGPROF(csmap_size)) {
-			/* comparing the line number is faster */
-			if (CGPROF(csmap)[cs_i].line == line &&
-				!strcmp(srcfile, CGPROF(csmap)[cs_i].srcfile)) {
-				break;
-			}
-			cs_i++;
-		}
-
 		/* increment the array */
 
-		CGPROF(calls)[cs_i * CGPROF(fnmap_size) + fn_id]++;
+		CGPROF(calls)[cs_id * CGPROF(fnmap_size) + fn_id]++;
 	}
 
 	void

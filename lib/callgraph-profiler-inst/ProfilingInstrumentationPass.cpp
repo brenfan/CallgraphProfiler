@@ -89,6 +89,7 @@ createCallTable(Module& m, uint64_t numCalls, std::vector<CallSite> calls) {
 		std::back_inserter(values),
 		[&m, structTy, int64Ty](CallSite cs) {
 			DILocation *Loc = cs.getInstruction()->getDebugLoc();
+			outs() << Loc->getFilename() << ":" << Loc->getLine() << " " << cs.getParent()->getParent()->getName() << "\n";
 
 			Constant* structFields[] = {
 				createConstantString(m, Loc->getFilename()), // srcfile
@@ -117,11 +118,10 @@ ProfilingInstrumentationPass::runOnModule(llvm::Module& m) {
 
 	/* common types */
 	auto *int64Ty = Type::getInt64Ty(context);
-	auto *stringTy = Type::getInt8PtrTy(context);
 	auto* voidTy  = Type::getVoidTy(context);
 
 	/* type for the `record` runtime helper */
-	auto* recordTy = FunctionType::get(voidTy, {stringTy, int64Ty, stringTy, int64Ty}, false);
+	auto* recordTy = FunctionType::get(voidTy, {int64Ty, int64Ty}, false);
 	auto* recordfn  = m.getOrInsertFunction("CaLlPrOfIlEr_record", recordTy);
 
 	/* type for the `map` runtime helper */
@@ -159,46 +159,56 @@ ProfilingInstrumentationPass::runOnModule(llvm::Module& m) {
 				if (!cs.getInstruction()) {
 					continue;
 				}
+				/* skip debug functions */
+				if (auto* directcall = cs.getCalledFunction()) {
+					auto calledname = directcall->getName();
+					if (calledname.startswith("llvm.dbg")) {
+						continue;
+					}
+				}
 
 				/* save a reference to the callsite */
 				cs_list.push_back(cs);
 
 				cs_id++;
-
-				/* get debug info */
-				DILocation *Loc = cs.getInstruction()->getDebugLoc();
-				unsigned line = Loc->getLine();
-				StringRef filename = Loc->getFilename();
-
-				IRBuilder<> builder(cs.getInstruction());
-				if (auto* directcall = cs.getCalledFunction()) {
-					auto calledname = directcall->getName();
-					if (calledname.startswith("llvm.dbg") ||
-						calledname.startswith("CaLlPrOfIlEr_")) {
-						continue;
-					}
-				}
-				/* cast the function to an int */
-				auto called = cs.getCalledValue()->stripPointerCasts();
-				auto* v = builder.CreateBitOrPointerCast(called, int64Ty);
-
-				/* assemble the arguments */
-				std::vector<Value*> args;
-				/* filename, line#, caller name, fn_ptr */
-				args.push_back(createConstantString(m, filename));
-				args.push_back(ConstantInt::get(int64Ty, line, false));
-				args.push_back(createConstantString(m, name));
-				args.push_back(v);
-
-				/* insert a call to the recording function */
-				builder.CreateCall(recordfn, ArrayRef<Value*>(args));
 			}
 		}
 	}
 
+
+	/* add profiling to each call */
+	uint64_t i = 0;
+	for (auto& cs : cs_list) {
+		/* get debug info */
+		DILocation *Loc = cs.getInstruction()->getDebugLoc();
+		unsigned line = Loc->getLine();
+		StringRef filename = Loc->getFilename();
+
+		IRBuilder<> builder(cs.getInstruction());
+
+		/* cast the function to an int */
+		auto called = cs.getCalledValue()->stripPointerCasts();
+		auto* v = builder.CreateBitOrPointerCast(called, int64Ty);
+
+		/* assemble the arguments */
+		std::vector<Value*> args;
+		/* filename, line#, caller name, fn_ptr */
+
+		outs() << filename << ":" << line << " " << cs.getCaller()->getName() << "\n";
+		args.push_back(ConstantInt::get(int64Ty, i, false));
+		args.push_back(v);
+
+		/* insert a call to the recording function */
+		builder.CreateCall(recordfn, ArrayRef<Value*>(args));
+		i++;
+	}
+
+	outs() << "\n";
+
 	/* add calls to the `map` helper function to the constructor function */
 	IRBuilder<> mapbuilder(ctorblock);
-	uint64_t i = 0;
+
+	i = 0;
 	for (auto &f : fn_list) {
 		/* hackcast */
 		auto* v = mapbuilder.CreateBitCast(f, int64Ty);
