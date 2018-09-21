@@ -43,6 +43,7 @@ createConstantString(llvm::Module& m, llvm::StringRef str) {
 	return llvm::ConstantExpr::getInBoundsGetElementPtr(arrayTy, asStr, indices);
 }
 
+/* fills the fnmap for function name lookup at runtime */
 static void
 createFunctionTable(Module& m, uint64_t numFunctions, std::vector<Function*> functions) {
 	auto& context = m.getContext();
@@ -59,8 +60,8 @@ createFunctionTable(Module& m, uint64_t numFunctions, std::vector<Function*> fun
 		std::back_inserter(values),
 		[&m, structTy, int64Ty](Function* f) {
 			Constant* structFields[] = {
-				createConstantString(m, f->getName()),
-				ConstantInt::get(int64Ty, 0, false)
+				createConstantString(m, f->getName()), // function name
+				ConstantInt::get(int64Ty, 0, false) // fnptr
 			};
 			return ConstantStruct::get(structTy, structFields);
 		}
@@ -72,6 +73,7 @@ createFunctionTable(Module& m, uint64_t numFunctions, std::vector<Function*> fun
 
 }
 
+/* fills the csmap for access to callsite info at runtime */
 static void
 createCallTable(Module& m, uint64_t numCalls, std::vector<CallSite> calls) {
 	auto& context = m.getContext();
@@ -89,7 +91,6 @@ createCallTable(Module& m, uint64_t numCalls, std::vector<CallSite> calls) {
 		std::back_inserter(values),
 		[&m, structTy, int64Ty](CallSite cs) {
 			DILocation *Loc = cs.getInstruction()->getDebugLoc();
-			outs() << Loc->getFilename() << ":" << Loc->getLine() << " " << cs.getParent()->getParent()->getName() << "\n";
 
 			Constant* structFields[] = {
 				createConstantString(m, Loc->getFilename()), // srcfile
@@ -108,11 +109,8 @@ createCallTable(Module& m, uint64_t numCalls, std::vector<CallSite> calls) {
 
 bool
 ProfilingInstrumentationPass::runOnModule(llvm::Module& m) {
-	// This is the entry point of your instrumentation pass.
 
 	auto& context = m.getContext();
-	/* Initial pass */
-	/* For each function in module */
 	uint64_t fn_id = 0; /* function ids */
 	uint64_t cs_id = 0; /* callsite ids */
 
@@ -192,9 +190,8 @@ ProfilingInstrumentationPass::runOnModule(llvm::Module& m) {
 
 		/* assemble the arguments */
 		std::vector<Value*> args;
-		/* filename, line#, caller name, fn_ptr */
 
-		outs() << filename << ":" << line << " " << cs.getCaller()->getName() << "\n";
+		/* cs_id, fnptr */
 		args.push_back(ConstantInt::get(int64Ty, i, false));
 		args.push_back(v);
 
@@ -203,7 +200,6 @@ ProfilingInstrumentationPass::runOnModule(llvm::Module& m) {
 		i++;
 	}
 
-	outs() << "\n";
 
 	/* add calls to the `map` helper function to the constructor function */
 	IRBuilder<> mapbuilder(ctorblock);

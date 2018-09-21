@@ -15,7 +15,7 @@ extern "C" {
 #define CGPROF(X) CaLlPrOfIlEr_ ## X
 #define OUTPUT_FILENAME "profile-results.csv"
 
-
+	/* --- data --- */
 	extern uint64_t CGPROF(fnmap_size);
 	extern uint64_t CGPROF(csmap_size);
 
@@ -28,13 +28,16 @@ extern "C" {
 
 	} CGPROF(csmap)[];
 
+	/* call counter */
 	extern uint64_t CGPROF(calls)[];
+
 	/* function map */
 	extern struct {
 		char* fn_name;
 		uint64_t fn_ptr;
 	} CGPROF(fnmap)[];
 
+	/* --- functions --- */
 	void
 	CGPROF(map) (uint64_t fn_ptr, uint64_t fn_id) {
 		CGPROF(fnmap)[fn_id].fn_ptr = fn_ptr;
@@ -68,7 +71,8 @@ extern "C" {
 				if (count) {
 					auto& info = CGPROF(csmap)[cs_id];
 					fprintf(f, "%s, %s, %lu, %s, %lu\n",
-						info.caller, info.srcfile,
+						info.caller,
+						info.srcfile,
 						info.line,
 						CGPROF(fnmap)[fn_id].fn_name,
 						count);

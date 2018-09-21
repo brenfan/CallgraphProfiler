@@ -13,7 +13,7 @@
 #
 
 LLVM_BIN     := /usr/shared/CMPT/faculty/wsumner/llvm/bin/
-PROFILER     := ../../p1build/bin/callgraph-profiler
+PROFILER     := ../../cgbuild/bin/callgraph-profiler
 CSV_TO_GV    := ../scripts/csv_to_gv.py
 CLANG        := $(LLVM_BIN)clang
 OPT          := $(LLVM_BIN)opt
